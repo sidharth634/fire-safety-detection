@@ -1,7 +1,7 @@
 import streamlit as st
 import tempfile
 import os
-import cv2
+
 from datetime import datetime
 
 # ================= PAGE CONFIG =================
@@ -187,3 +187,4 @@ st.caption(
     "⚠️ Disclaimer: This cloud deployment demonstrates system workflow only. "
     "Real-time AI inference runs on local or edge devices."
 )
+
