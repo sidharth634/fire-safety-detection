@@ -1,7 +1,6 @@
 import streamlit as st
 import tempfile
 import os
-
 from datetime import datetime
 
 # ================= PAGE CONFIG =================
@@ -65,7 +64,7 @@ if st.session_state.admin_logged_in:
     )
 else:
     st.sidebar.info(
-        f"🔒 Active Mode: **{st.session_state.detection_mode}**\n\n(Admin controlled)"
+        f"🔒 Active Mode: **{st.session_state.detection_mode}**\n(Admin controlled)"
     )
 
 st.sidebar.divider()
@@ -77,10 +76,12 @@ st.info(f"🔥 Total fire events detected this session: {st.session_state.fire_c
 st.success(f"⚙️ Active Detection Mode: {st.session_state.detection_mode}")
 
 if IS_DEMO_MODE:
-    st.warning("⚠️ DEMO MODE: Cloud-safe fire detection simulation")
+    st.warning("⚠️ DEMO MODE: Cloud-safe fire simulation enabled")
 
-# ================= FIRE BOX FUNCTION =================
+# ================= FIRE BOX FUNCTION (LAZY IMPORT) =================
 def draw_demo_fire_box(image_path):
+    import cv2  # lazy import (cloud-safe)
+
     img = cv2.imread(image_path)
     h, w, _ = img.shape
 
@@ -124,7 +125,7 @@ if uploaded_file:
     fire_keywords = ["fire", "flame", "smoke", "burn", "blaze"]
     filename_lower = uploaded_file.name.lower()
 
-    fire_event_detected = any(keyword in filename_lower for keyword in fire_keywords)
+    fire_event_detected = any(k in filename_lower for k in fire_keywords)
 
     if fire_event_detected:
         st.session_state.fire_count += 1
@@ -134,7 +135,7 @@ if uploaded_file:
             f"🕒 Detection Time: {datetime.now().strftime('%d %b %Y, %H:%M:%S')}"
         )
 
-        # Draw fire bounding box (image only)
+        # Draw demo bounding box (images only)
         if suffix.lower() in [".jpg", ".jpeg", ".png"]:
             boxed_img = draw_demo_fire_box(temp_path)
 
@@ -146,6 +147,8 @@ if uploaded_file:
 
             os.makedirs("alerts", exist_ok=True)
             out_path = f"alerts/fire_demo_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+
+            import cv2  # lazy import again for save
             cv2.imwrite(out_path, boxed_img)
 
             with open(out_path, "rb") as f:
@@ -157,7 +160,6 @@ if uploaded_file:
                 )
         else:
             st.info("🎞️ Fire detected in video (visual box shown for images only)")
-
     else:
         st.success("✅ No fire detected in the uploaded file")
 
@@ -187,4 +189,3 @@ st.caption(
     "⚠️ Disclaimer: This cloud deployment demonstrates system workflow only. "
     "Real-time AI inference runs on local or edge devices."
 )
-
