@@ -92,7 +92,8 @@ st.sidebar.markdown("🚨 Emergency: **Fire – 101 (India)**")
 # ================== LOAD MODEL ==================
 @st.cache_resource
 def load_model():
-    return YOLO("models/best.pt")
+    return YOLO("models/fire_model.pt")
+
 
 
 model = load_model()
@@ -249,4 +250,5 @@ st.divider()
 st.caption(
     "⚠️ Disclaimer: This system assists early fire detection and must not replace certified fire alarm systems."
 )
+
 
