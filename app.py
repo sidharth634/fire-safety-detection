@@ -105,7 +105,11 @@ if uploaded_file:
     # ================= DEMO DETECTION =================
     st.warning("⚠️ Demo Mode: Simulating fire detection")
 
-    fire_event_detected = True  # Simulated detection
+    import random
+
+    # Simulate fire detection realistically
+    fire_event_detected = random.choice([True, False])
+
 
     if fire_event_detected:
         st.session_state.fire_count += 1
@@ -148,3 +152,4 @@ st.caption(
     "⚠️ Disclaimer: This cloud deployment demonstrates system workflow only. "
     "Real-time AI inference runs on local/edge systems."
 )
+
