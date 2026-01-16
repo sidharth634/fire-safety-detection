@@ -92,7 +92,17 @@ st.sidebar.markdown("🚨 Emergency: **Fire – 101 (India)**")
 # ================== LOAD MODEL ==================
 @st.cache_resource
 def load_model():
-    return YOLO("models/fire_model.pt")
+    import os
+
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    MODEL_PATH = os.path.join(BASE_DIR, "models", "fire_model.pt")
+
+    if not os.path.exists(MODEL_PATH):
+        st.error(f"Model file not found at: {MODEL_PATH}")
+        st.stop()
+
+    return YOLO(MODEL_PATH)
+
 
 
 
@@ -250,5 +260,6 @@ st.divider()
 st.caption(
     "⚠️ Disclaimer: This system assists early fire detection and must not replace certified fire alarm systems."
 )
+
 
 
