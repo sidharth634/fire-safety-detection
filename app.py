@@ -1,7 +1,9 @@
 import streamlit as st
 import tempfile
 import os
+import numpy as np
 from datetime import datetime
+from PIL import Image, ImageDraw, ImageFont
 
 # ================= PAGE CONFIG =================
 st.set_page_config(
@@ -10,9 +12,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# ================= DEMO MODE =================
-IS_DEMO_MODE = True  # Cloud-safe demo mode
-
 # ================= SESSION STATE =================
 if "admin_logged_in" not in st.session_state:
     st.session_state.admin_logged_in = False
@@ -20,15 +19,12 @@ if "admin_logged_in" not in st.session_state:
 if "fire_count" not in st.session_state:
     st.session_state.fire_count = 0
 
-if "detection_mode" not in st.session_state:
-    st.session_state.detection_mode = "Balanced (Recommended)"
-
 # ================= HEADER =================
 st.markdown(
     """
     <h1 style="text-align:center;">🔥 Fire Safety Detection System</h1>
     <p style="text-align:center;font-size:18px;">
-    Cloud Demo • Visual Fire Detection • Safety-First Design
+    Cloud Fire Detection Demo (Content-based)
     </p>
     """,
     unsafe_allow_html=True
@@ -53,103 +49,73 @@ else:
         st.rerun()
 
 st.sidebar.divider()
-
-# ================= DETECTION MODE =================
-st.sidebar.header("⚙️ Detection Mode")
-
-if st.session_state.admin_logged_in:
-    st.session_state.detection_mode = st.sidebar.selectbox(
-        "Detection sensitivity (Admin only)",
-        ["Balanced (Recommended)", "High Sensitivity", "Low Sensitivity"]
-    )
-else:
-    st.sidebar.info(
-        f"🔒 Active Mode: **{st.session_state.detection_mode}**\n(Admin controlled)"
-    )
-
-st.sidebar.divider()
 st.sidebar.markdown("🚨 Emergency: **Fire – 101 (India)**")
 
 # ================= STATUS =================
 st.subheader("📊 System Status")
-st.info(f"🔥 Total fire events detected this session: {st.session_state.fire_count}")
-st.success(f"⚙️ Active Detection Mode: {st.session_state.detection_mode}")
+st.info(f"🔥 Total fire events detected: {st.session_state.fire_count}")
 
-if IS_DEMO_MODE:
-    st.warning("⚠️ DEMO MODE: Cloud-safe fire simulation enabled")
+# ================= FIRE DETECTION LOGIC =================
+def detect_fire_by_color(image: Image.Image) -> bool:
+    img = np.array(image)
 
-# ================= FIRE BOX FUNCTION (LAZY IMPORT) =================
-def draw_demo_fire_box(image_path):
-    import cv2  # lazy import (cloud-safe)
+    r, g, b = img[:, :, 0], img[:, :, 1], img[:, :, 2]
 
-    img = cv2.imread(image_path)
-    h, w, _ = img.shape
+    # Fire color heuristic
+    fire_pixels = (
+        (r > 150) &
+        (g > 80) &
+        (b < 120) &
+        (r > g) &
+        (g > b)
+    )
+
+    fire_ratio = np.sum(fire_pixels) / fire_pixels.size
+    return fire_ratio > 0.02  # 2% fire-like pixels
+
+
+def draw_fire_box(image: Image.Image) -> Image.Image:
+    draw = ImageDraw.Draw(image)
+    w, h = image.size
 
     x1, y1 = int(w * 0.25), int(h * 0.25)
     x2, y2 = int(w * 0.75), int(h * 0.75)
 
-    cv2.rectangle(img, (x1, y1), (x2, y2), (0, 0, 255), 4)
-    cv2.putText(
-        img,
-        "🔥 FIRE",
-        (x1, y1 - 10),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        1,
-        (0, 0, 255),
-        3
-    )
-    return img
+    draw.rectangle([x1, y1, x2, y2], outline="red", width=5)
+    draw.text((x1, y1 - 30), "🔥 FIRE", fill="red")
+    return image
 
 # ================= FILE UPLOAD =================
 st.subheader("📤 Upload Image or Video")
 
 uploaded_file = st.file_uploader(
-    "Supported formats: JPG, PNG, MP4, AVI",
+    "Supported formats: JPG, PNG (Video demo limited)",
     type=["jpg", "jpeg", "png", "mp4", "avi", "mov"]
 )
 
 if uploaded_file:
-    suffix = os.path.splitext(uploaded_file.name)[1]
+    suffix = os.path.splitext(uploaded_file.name)[1].lower()
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp:
         temp.write(uploaded_file.read())
         temp_path = temp.name
 
-    # Display uploaded content
-    if suffix.lower() in [".jpg", ".jpeg", ".png"]:
-        st.image(temp_path, caption="Uploaded Image", use_container_width=True)
-    else:
-        st.video(temp_path)
+    if suffix in [".jpg", ".jpeg", ".png"]:
+        image = Image.open(temp_path).convert("RGB")
+        st.image(image, caption="Uploaded Image", use_container_width=True)
 
-    # ================= SMART DEMO DETECTION =================
-    fire_keywords = ["fire", "flame", "smoke", "burn", "blaze"]
-    filename_lower = uploaded_file.name.lower()
+        fire_detected = detect_fire_by_color(image)
 
-    fire_event_detected = any(k in filename_lower for k in fire_keywords)
+        if fire_detected:
+            st.session_state.fire_count += 1
+            st.error("🔥 FIRE DETECTED")
 
-    if fire_event_detected:
-        st.session_state.fire_count += 1
-
-        st.error("🔥 FIRE EVENT DETECTED")
-        st.caption(
-            f"🕒 Detection Time: {datetime.now().strftime('%d %b %Y, %H:%M:%S')}"
-        )
-
-        # Draw demo bounding box (images only)
-        if suffix.lower() in [".jpg", ".jpeg", ".png"]:
-            boxed_img = draw_demo_fire_box(temp_path)
-
-            st.image(
-                boxed_img,
-                caption="Detected Fire Region (Demo Visualization)",
-                use_container_width=True
-            )
+            boxed = draw_fire_box(image.copy())
+            st.image(boxed, caption="Detected Fire Region", use_container_width=True)
 
             os.makedirs("alerts", exist_ok=True)
-            out_path = f"alerts/fire_demo_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
-
-            import cv2  # lazy import again for save
-            cv2.imwrite(out_path, boxed_img)
+            out_path = f"alerts/fire_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+            boxed.save(out_path)
 
             with open(out_path, "rb") as f:
                 st.download_button(
@@ -159,11 +125,13 @@ if uploaded_file:
                     mime="image/jpeg"
                 )
         else:
-            st.info("🎞️ Fire detected in video (visual box shown for images only)")
-    else:
-        st.success("✅ No fire detected in the uploaded file")
+            st.success("✅ No fire detected in the image")
 
-# ================= SAFETY AWARENESS =================
+    else:
+        st.warning("🎞️ Video analysis on cloud is limited")
+        st.info("Upload an image frame for accurate fire detection")
+
+# ================= SAFETY =================
 st.divider()
 st.subheader("🛡️ Fire Safety Awareness")
 
@@ -175,17 +143,9 @@ with st.expander("🚨 Emergency Steps"):
     - Call **Fire Emergency: 101**
     """)
 
-with st.expander("🧯 Fire Prevention Tips"):
-    st.markdown("""
-    - Do not leave cooking unattended  
-    - Keep flammable materials away from heat  
-    - Inspect wiring regularly  
-    - Install smoke detectors
-    """)
-
 # ================= DISCLAIMER =================
 st.divider()
 st.caption(
-    "⚠️ Disclaimer: This cloud deployment demonstrates system workflow only. "
-    "Real-time AI inference runs on local or edge devices."
+    "⚠️ Cloud version uses color-based fire detection. "
+    "Production systems use deep-learning models on edge devices."
 )
