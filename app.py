@@ -1,47 +1,43 @@
 import streamlit as st
-from ultralytics import YOLO
 import tempfile
 import os
-import cv2
-import numpy as np
 from datetime import datetime
 
-# ================== PAGE CONFIG ==================
+# ================= PAGE CONFIG =================
 st.set_page_config(
-    page_title="Fire Safety Detection System",
+    page_title="🔥 Fire Safety Detection System",
     page_icon="🔥",
     layout="wide"
 )
 
-# ================== SESSION STATE ==================
+# ================= DEMO MODE FLAG =================
+# Streamlit Cloud cannot run OpenCV / YOLO
+IS_DEMO_MODE = True
+
+# ================= SESSION STATE =================
 if "admin_logged_in" not in st.session_state:
     st.session_state.admin_logged_in = False
 
 if "fire_count" not in st.session_state:
     st.session_state.fire_count = 0
 
-if "last_fire_id" not in st.session_state:
-    st.session_state.last_fire_id = None
-
-# 🔐 Detection mode stored in session (ADMIN controlled)
-if "detection_mode" not in st.session_state:
-    st.session_state.detection_mode = "Balanced (Recommended)"
-
-# ================== HEADER ==================
+# ================= HEADER =================
 st.markdown(
     """
-    <h1 style='text-align:center;'>🔥 Fire Safety Detection System</h1>
-    <p style='text-align:center;font-size:18px;'>
-    AI-powered fire & smoke detection (safety-first, admin-controlled)
+    <h1 style="text-align:center;">🔥 Fire Safety Detection System</h1>
+    <p style="text-align:center;font-size:18px;">
+    Cloud-deployed demo | AI inference runs locally
     </p>
     """,
     unsafe_allow_html=True
 )
+
 st.divider()
 
-# ================== SIDEBAR ==================
+# ================= SIDEBAR =================
 ADMIN_PASSWORD = "admin123"
-st.sidebar.header("🔐 Admin Access")
+
+st.sidebar.header("🔐 Admin Login")
 
 if not st.session_state.admin_logged_in:
     pwd = st.sidebar.text_input("Enter admin password", type="password")
@@ -51,69 +47,41 @@ if not st.session_state.admin_logged_in:
         st.rerun()
 else:
     st.sidebar.success("Logged in as Admin")
-    if st.sidebar.button("Logout Admin"):
+    if st.sidebar.button("Logout"):
         st.session_state.admin_logged_in = False
         st.rerun()
 
-# ================== DETECTION MODE (ADMIN ONLY) ==================
 st.sidebar.divider()
+
+# ================= DETECTION MODE (ADMIN ONLY) =================
+if "detection_mode" not in st.session_state:
+    st.session_state.detection_mode = "Balanced (Recommended)"
+
 st.sidebar.header("⚙️ Detection Mode")
 
 if st.session_state.admin_logged_in:
     st.session_state.detection_mode = st.sidebar.selectbox(
-        "Set detection sensitivity (Admin only)",
-        ["Balanced (Recommended)", "High Sensitivity (Early Warning)", "Low Sensitivity (Strict)"],
-        index=["Balanced (Recommended)", "High Sensitivity (Early Warning)", "Low Sensitivity (Strict)"]
-        .index(st.session_state.detection_mode)
+        "Detection sensitivity (Admin only)",
+        ["Balanced (Recommended)", "High Sensitivity", "Low Sensitivity"]
     )
 else:
     st.sidebar.info(
-        f"🔒 Detection Mode: **{st.session_state.detection_mode}**\n\n"
-        "Only admin can change this."
+        f"🔒 Active Mode: **{st.session_state.detection_mode}**\n\nAdmin-controlled"
     )
-
-# Map detection mode → confidence
-if st.session_state.detection_mode == "High Sensitivity (Early Warning)":
-    confidence = 0.2
-elif st.session_state.detection_mode == "Low Sensitivity (Strict)":
-    confidence = 0.6
-else:
-    confidence = 0.4
-
-st.sidebar.markdown("""
-**Detection Logic**
-- Fire OR Smoke → FIRE EVENT
-- Safety-first configuration
-""")
 
 st.sidebar.divider()
 st.sidebar.markdown("🚨 Emergency: **Fire – 101 (India)**")
 
-# ================== LOAD MODEL ==================
-@st.cache_resource
-def load_model():
-    import os
-
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    MODEL_PATH = os.path.join(BASE_DIR, "models", "fire_model.pt")
-
-    if not os.path.exists(MODEL_PATH):
-        st.error(f"Model file not found at: {MODEL_PATH}")
-        st.stop()
-
-    return YOLO(MODEL_PATH)
-
-
-
-
-model = load_model()
-
-# ================== STATUS ==================
+# ================= SYSTEM STATUS =================
 st.subheader("📊 System Status")
+
 st.info(f"🔥 Total fire events detected this session: {st.session_state.fire_count}")
 st.success(f"⚙️ Active Detection Mode: {st.session_state.detection_mode}")
 
-# ================== FILE UPLOAD ==================
+if IS_DEMO_MODE:
+    st.warning("⚠️ DEMO MODE: AI inference disabled on cloud")
+
+# ================= FILE UPLOAD =================
 st.subheader("📤 Upload Image or Video")
 
 uploaded_file = st.file_uploader(
@@ -128,138 +96,55 @@ if uploaded_file:
         temp.write(uploaded_file.read())
         temp_path = temp.name
 
-    fire_event = False
-    annotated = None
-    fire_id = None
+    # Show uploaded content
+    if suffix.lower() in [".jpg", ".jpeg", ".png"]:
+        st.image(temp_path, caption="Uploaded Image", use_container_width=True)
+    else:
+        st.video(temp_path)
 
-    with st.spinner("🔍 Analyzing input..."):
+    # ================= DEMO DETECTION =================
+    st.warning("⚠️ Demo Mode: Simulating fire detection")
 
-        if suffix.lower() in [".jpg", ".jpeg", ".png"]:
-            r = model.predict(temp_path, conf=confidence)[0]
-            frame = cv2.imread(temp_path)
+    fire_event_detected = True  # Simulated detection
 
-            if r.boxes is not None and len(r.boxes) > 0:
-                annotated = frame.copy()
-                for box in r.boxes.xyxy:
-                    x1, y1, x2, y2 = map(int, box)
-                    cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 0, 255), 3)
-                    cv2.putText(
-                        annotated, "FIRE", (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2
-                    )
-                fire_event = True
-
-        else:
-            cap = cv2.VideoCapture(temp_path)
-            while cap.isOpened():
-                ret, frame = cap.read()
-                if not ret:
-                    break
-                r = model(frame, conf=confidence)[0]
-                if r.boxes is not None and len(r.boxes) > 0:
-                    annotated = frame.copy()
-                    for box in r.boxes.xyxy:
-                        x1, y1, x2, y2 = map(int, box)
-                        cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 0, 255), 3)
-                        cv2.putText(
-                            annotated, "FIRE", (x1, y1 - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2
-                        )
-                    fire_event = True
-                    break
-            cap.release()
-
-    if fire_event:
-        fire_id = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-        if st.session_state.last_fire_id != fire_id:
-            st.session_state.fire_count += 1
-            st.session_state.last_fire_id = fire_id
-
-        os.makedirs("alerts", exist_ok=True)
-        img_path = f"alerts/fire_{fire_id}.jpg"
-        cv2.imwrite(img_path, annotated)
+    if fire_event_detected:
+        st.session_state.fire_count += 1
 
         st.error("🔥 FIRE EVENT DETECTED")
-        st.image(annotated, channels="BGR", use_container_width=True)
+        st.caption(
+            f"🕒 Detection Time: {datetime.now().strftime('%d %b %Y, %H:%M:%S')}"
+        )
 
-        with open(img_path, "rb") as f:
+        with open(temp_path, "rb") as f:
             st.download_button(
-                "⬇️ Download Detected Image",
+                "⬇️ Download Evidence File",
                 f,
-                file_name=os.path.basename(img_path),
-                mime="image/jpeg"
+                file_name=uploaded_file.name
             )
-    else:
-        st.success("✅ No fire detected")
 
-# ================== LIVE WEBCAM (ADMIN ONLY) ==================
-if st.session_state.admin_logged_in:
-    st.divider()
-    st.subheader("🎥 Live Webcam Fire Detection (Admin Only)")
+# ================= SAFETY AWARENESS =================
+st.divider()
+st.subheader("🛡️ Fire Safety Awareness")
 
-    start = st.button("▶ Start Webcam Monitoring")
-    stop = st.button("⏹ Stop Webcam")
+with st.expander("🚨 Emergency Steps"):
+    st.markdown("""
+    - Stay calm and evacuate immediately  
+    - Do NOT use elevators  
+    - Turn off gas and electricity if safe  
+    - Call **Fire Emergency: 101**
+    """)
 
-    frame_box = st.empty()
+with st.expander("🧯 Fire Prevention Tips"):
+    st.markdown("""
+    - Do not leave cooking unattended  
+    - Keep flammable materials away from heat  
+    - Inspect wiring regularly  
+    - Install smoke detectors
+    """)
 
-    if start:
-        cap = cv2.VideoCapture(0)
-        frame_count = 0
-        st.info("Webcam monitoring started (optimized mode)")
-
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret or stop:
-                break
-
-            frame_count += 1
-            if frame_count % 10 != 0:
-                continue
-
-            r = model(frame, conf=confidence)[0]
-            frame_box.image(frame, channels="BGR")
-
-            if r.boxes is not None and len(r.boxes) > 0:
-                fire_id = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-                if st.session_state.last_fire_id != fire_id:
-                    st.session_state.fire_count += 1
-                    st.session_state.last_fire_id = fire_id
-
-                annotated = frame.copy()
-                for box in r.boxes.xyxy:
-                    x1, y1, x2, y2 = map(int, box)
-                    cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 0, 255), 3)
-                    cv2.putText(
-                        annotated, "FIRE", (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2
-                    )
-
-                os.makedirs("alerts", exist_ok=True)
-                img_path = f"alerts/webcam_fire_{fire_id}.jpg"
-                cv2.imwrite(img_path, annotated)
-
-                st.error("🔥 FIRE DETECTED — Screenshot Captured")
-                st.image(annotated, channels="BGR", use_container_width=True)
-
-                with open(img_path, "rb") as f:
-                    st.download_button(
-                        "⬇️ Download Webcam Snapshot",
-                        f,
-                        file_name=os.path.basename(img_path),
-                        mime="image/jpeg"
-                    )
-                break
-
-        cap.release()
-        frame_box.empty()
-
-# ================== DISCLAIMER ==================
+# ================= DISCLAIMER =================
 st.divider()
 st.caption(
-    "⚠️ Disclaimer: This system assists early fire detection and must not replace certified fire alarm systems."
+    "⚠️ Disclaimer: This cloud deployment demonstrates system workflow only. "
+    "Real-time AI inference runs on local/edge systems."
 )
-
-
-
