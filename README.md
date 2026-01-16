@@ -1,6 +1,6 @@
-🔥 Fire \& Smoke Detection using YOLOv8
+Fire \& Smoke Detection using YOLOv8
 
-📌 Project Overview
+Project Overview
 
 
 
@@ -10,7 +10,7 @@ It detects fire-related events from images, videos, and webcam streams and trigg
 
 
 
-🎯 Problem Statement
+Problem Statement
 
 
 
@@ -20,7 +20,7 @@ This project uses computer vision to detect fire and smoke visually for faster a
 
 
 
-🧠 Solution Approach
+Solution Approach
 
 
 
@@ -68,7 +68,7 @@ Webcam-based real-time fire event alerts
 
 
 
-⚙️ Tech Stack
+Tech Stack
 
 
 
@@ -94,7 +94,7 @@ CUDA (GPU Acceleration)
 
 
 
-🚀 Features
+Features
 
 
 
@@ -118,7 +118,7 @@ Industry-style fire-event logic (fire OR smoke → alert)
 
 
 
-▶️ How to Run
+How to Run
 
 
 
@@ -170,7 +170,7 @@ python detect\_webcam\_alert.py
 
 
 
-📈 Key Learnings
+Key Learnings
 
 
 
@@ -190,7 +190,7 @@ Real-world deployment challenges
 
 
 
-📌 Future Improvements
+Future Improvements
 
 
 
@@ -207,4 +207,5 @@ Add sound/email alerts
 
 
 Deploy as a web or mobile application
+
 
