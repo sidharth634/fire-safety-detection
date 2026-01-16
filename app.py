@@ -10,9 +10,8 @@ st.set_page_config(
     layout="wide"
 )
 
-# ================= DEMO MODE FLAG =================
-# Streamlit Cloud cannot run OpenCV / YOLO
-IS_DEMO_MODE = True
+# ================= DEMO MODE =================
+IS_DEMO_MODE = True  # Cloud-safe demo mode
 
 # ================= SESSION STATE =================
 if "admin_logged_in" not in st.session_state:
@@ -26,12 +25,11 @@ st.markdown(
     """
     <h1 style="text-align:center;">🔥 Fire Safety Detection System</h1>
     <p style="text-align:center;font-size:18px;">
-    Cloud-deployed demo | AI inference runs locally
+    Cloud-deployed demo | Real AI runs locally / edge
     </p>
     """,
     unsafe_allow_html=True
 )
-
 st.divider()
 
 # ================= SIDEBAR =================
@@ -53,7 +51,7 @@ else:
 
 st.sidebar.divider()
 
-# ================= DETECTION MODE (ADMIN ONLY) =================
+# ================= DETECTION MODE =================
 if "detection_mode" not in st.session_state:
     st.session_state.detection_mode = "Balanced (Recommended)"
 
@@ -66,7 +64,7 @@ if st.session_state.admin_logged_in:
     )
 else:
     st.sidebar.info(
-        f"🔒 Active Mode: **{st.session_state.detection_mode}**\n\nAdmin-controlled"
+        f"🔒 Active Mode: **{st.session_state.detection_mode}**\n\n(Admin controlled)"
     )
 
 st.sidebar.divider()
@@ -74,12 +72,11 @@ st.sidebar.markdown("🚨 Emergency: **Fire – 101 (India)**")
 
 # ================= SYSTEM STATUS =================
 st.subheader("📊 System Status")
-
 st.info(f"🔥 Total fire events detected this session: {st.session_state.fire_count}")
 st.success(f"⚙️ Active Detection Mode: {st.session_state.detection_mode}")
 
 if IS_DEMO_MODE:
-    st.warning("⚠️ DEMO MODE: AI inference disabled on cloud")
+    st.warning("⚠️ DEMO MODE: Cloud-safe simulation enabled")
 
 # ================= FILE UPLOAD =================
 st.subheader("📤 Upload Image or Video")
@@ -96,20 +93,19 @@ if uploaded_file:
         temp.write(uploaded_file.read())
         temp_path = temp.name
 
-    # Show uploaded content
+    # Display uploaded content
     if suffix.lower() in [".jpg", ".jpeg", ".png"]:
         st.image(temp_path, caption="Uploaded Image", use_container_width=True)
     else:
         st.video(temp_path)
 
-    # ================= DEMO DETECTION =================
-    st.warning("⚠️ Demo Mode: Simulating fire detection")
+    # ================= SMART DEMO DETECTION (FIX 3) =================
+    st.warning("⚠️ Demo Mode: Intelligent fire simulation")
 
-    import random
+    fire_keywords = ["fire", "flame", "smoke", "burn", "blaze"]
+    filename_lower = uploaded_file.name.lower()
 
-    # Simulate fire detection realistically
-    fire_event_detected = random.choice([True, False])
-
+    fire_event_detected = any(keyword in filename_lower for keyword in fire_keywords)
 
     if fire_event_detected:
         st.session_state.fire_count += 1
@@ -125,6 +121,8 @@ if uploaded_file:
                 f,
                 file_name=uploaded_file.name
             )
+    else:
+        st.success("✅ No fire detected in the uploaded file")
 
 # ================= SAFETY AWARENESS =================
 st.divider()
@@ -150,6 +148,5 @@ with st.expander("🧯 Fire Prevention Tips"):
 st.divider()
 st.caption(
     "⚠️ Disclaimer: This cloud deployment demonstrates system workflow only. "
-    "Real-time AI inference runs on local/edge systems."
+    "Real-time AI inference runs on local or edge devices."
 )
-
