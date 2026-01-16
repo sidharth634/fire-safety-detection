@@ -1,4 +1,5 @@
 🔥 Fire & Smoke Detection using YOLOv8
+
 📌 Project Overview
 
 This project implements a real-time fire and smoke detection system using YOLOv8.
@@ -103,3 +104,4 @@ Merge fire & smoke into a single fire-event class
 Add sound/email alerts
 
 Deploy as a web or mobile application
+
