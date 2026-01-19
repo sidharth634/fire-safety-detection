@@ -4,6 +4,7 @@ import os
 import numpy as np
 from datetime import datetime
 from PIL import Image, ImageDraw
+import imageio.v2 as imageio
 
 # ================= PAGE CONFIG =================
 st.set_page_config(
@@ -18,25 +19,18 @@ if "fire_count" not in st.session_state:
 
 # ================= HEADER =================
 st.title("🔥 Fire Safety Detection System")
-st.caption("Unified Cloud Demo • Stable on Hugging Face & Streamlit Cloud")
+st.caption("Cloud-safe fire detection • Image & Video supported")
 st.divider()
 
 # ================= STATUS =================
 st.subheader("📊 System Status")
 st.info(f"🔥 Total fire events detected: {st.session_state.fire_count}")
 
-# ================= ROBUST FIRE DETECTION =================
+# ================= FIRE DETECTION =================
 def detect_fire(image: Image.Image):
-    """
-    Returns:
-        fire_detected (bool)
-        confidence (float)
-    """
     img = np.array(image).astype(np.float32)
-
     r, g, b = img[:, :, 0], img[:, :, 1], img[:, :, 2]
 
-    # Fire color heuristic (RELAXED + ROBUST)
     fire_mask = (
         (r > 140) &
         (g > 80) &
@@ -45,38 +39,23 @@ def detect_fire(image: Image.Image):
         (g >= b)
     )
 
-    fire_pixels = np.sum(fire_mask)
-    total_pixels = fire_mask.size
-    fire_ratio = fire_pixels / total_pixels
+    fire_ratio = np.sum(fire_mask) / fire_mask.size
 
-    # Brightness confirmation
+    if fire_ratio < 0.005:
+        return False
+
     brightness = (r + g + b) / 3
-    bright_fire = brightness[fire_mask]
+    if np.mean(brightness[fire_mask]) < 120:
+        return False
 
-    if bright_fire.size == 0:
-        return False, 0.0
-
-    avg_brightness = np.mean(bright_fire)
-
-    # Confidence score (used for debugging & stability)
-    confidence = min(1.0, fire_ratio * 20 + avg_brightness / 255)
-
-    # Final decision (platform-stable)
-    fire_detected = (
-        fire_ratio > 0.005 and      # 0.5% fire pixels
-        avg_brightness > 120        # glowing fire
-    )
-
-    return fire_detected, confidence
+    return True
 
 
 def draw_fire_box(image: Image.Image):
     draw = ImageDraw.Draw(image)
     w, h = image.size
-
     x1, y1 = int(w * 0.2), int(h * 0.2)
     x2, y2 = int(w * 0.8), int(h * 0.8)
-
     draw.rectangle([x1, y1, x2, y2], outline="red", width=5)
     draw.text((x1, y1 - 30), "🔥 FIRE", fill="red")
     return image
@@ -85,7 +64,7 @@ def draw_fire_box(image: Image.Image):
 st.subheader("📤 Upload Image or Video")
 
 uploaded = st.file_uploader(
-    "Supported: JPG, PNG, MP4",
+    "Supported formats: JPG, PNG, MP4, AVI, MOV",
     type=["jpg", "jpeg", "png", "mp4", "avi", "mov"]
 )
 
@@ -96,22 +75,20 @@ if uploaded:
         tmp.write(uploaded.read())
         path = tmp.name
 
-    # ---------- IMAGE ----------
+    # ================= IMAGE =================
     if suffix in [".jpg", ".jpeg", ".png"]:
         image = Image.open(path).convert("RGB")
         st.image(image, caption="Uploaded Image", use_container_width=True)
 
         with st.spinner("🔍 Analyzing image..."):
-            fire, confidence = detect_fire(image)
-
-        st.caption(f"Detection confidence: **{confidence:.2f}**")
+            fire = detect_fire(image)
 
         if fire:
             st.session_state.fire_count += 1
-
             boxed = draw_fire_box(image.copy())
+
             st.error("🔥 FIRE DETECTED")
-            st.image(boxed, caption="Fire Region", use_container_width=True)
+            st.image(boxed, caption="Fire Detected", use_container_width=True)
 
             os.makedirs("alerts", exist_ok=True)
             out = f"alerts/fire_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
@@ -119,7 +96,7 @@ if uploaded:
 
             with open(out, "rb") as f:
                 st.download_button(
-                    "⬇️ Download Fire Evidence",
+                    "⬇️ Download Fire Image",
                     f,
                     file_name=os.path.basename(out),
                     mime="image/jpeg"
@@ -127,13 +104,49 @@ if uploaded:
         else:
             st.success("✅ No fire detected")
 
-    # ---------- VIDEO ----------
+    # ================= VIDEO =================
     else:
         st.video(path)
-        st.warning(
-            "🎞️ Video analysis on cloud is optimized.\n\n"
-            "➡️ Upload a key frame image for accurate detection."
-        )
+
+        st.spinner("🔍 Analyzing video for fire...")
+
+        reader = imageio.get_reader(path)
+        fps = reader.get_meta_data().get("fps", 10)
+
+        fire_found = False
+        detected_frame = None
+
+        for i, frame in enumerate(reader):
+            # Sample 1 frame per second
+            if i % int(fps) != 0:
+                continue
+
+            image = Image.fromarray(frame).convert("RGB")
+            if detect_fire(image):
+                fire_found = True
+                detected_frame = draw_fire_box(image)
+                break
+
+        reader.close()
+
+        if fire_found:
+            st.session_state.fire_count += 1
+            st.error("🔥 FIRE DETECTED IN VIDEO")
+            st.image(detected_frame, caption="Fire Detected Frame", use_container_width=True)
+
+            os.makedirs("alerts", exist_ok=True)
+            out = f"alerts/video_fire_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+            detected_frame.save(out)
+
+            with open(out, "rb") as f:
+                st.download_button(
+                    "⬇️ Download Detected Frame",
+                    f,
+                    file_name=os.path.basename(out),
+                    mime="image/jpeg"
+                )
+        else:
+            st.success("✅ No fire detected in the video")
 
 # ================= SAFETY =================
 st.divider()
@@ -150,6 +163,6 @@ with st.expander("🚨 Emergency Steps"):
 # ================= DISCLAIMER =================
 st.divider()
 st.caption(
-    "⚠️ Cloud deployments use heuristic fire detection for stability. "
-    "Production systems use deep-learning models on edge devices."
+    "⚠️ Cloud deployment uses optimized fire detection. "
+    "Production systems use deep learning models on edge devices."
 )
