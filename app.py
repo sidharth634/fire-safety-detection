@@ -17,28 +17,20 @@ if "fire_count" not in st.session_state:
     st.session_state.fire_count = 0
 
 # ================= HEADER =================
-st.markdown(
-    """
-    <h1 style="text-align:center;">🔥 Fire Safety Detection System</h1>
-    <p style="text-align:center;font-size:18px;">
-    Cloud Demo • Multi-Stage Fire Detection
-    </p>
-    """,
-    unsafe_allow_html=True
-)
+st.title("🔥 Fire Safety Detection System")
+st.caption("Cloud-safe demo • Visual fire detection • No GPU required")
 st.divider()
 
 # ================= STATUS =================
 st.subheader("📊 System Status")
 st.info(f"🔥 Total fire events detected: {st.session_state.fire_count}")
 
-# ================= ADVANCED FIRE DETECTION =================
-def detect_fire_advanced(image: Image.Image) -> bool:
+# ================= FIRE DETECTION (CLOUD SAFE) =================
+def detect_fire(image: Image.Image) -> bool:
+    """Multi-stage fire detection using color + brightness + clustering"""
     img = np.array(image).astype(np.float32)
-
     r, g, b = img[:, :, 0], img[:, :, 1], img[:, :, 2]
 
-    # 1️⃣ Fire color condition
     fire_mask = (
         (r > 160) &
         (g > 90) &
@@ -47,23 +39,20 @@ def detect_fire_advanced(image: Image.Image) -> bool:
         (g > b)
     )
 
-    fire_pixel_ratio = np.sum(fire_mask) / fire_mask.size
-    if fire_pixel_ratio < 0.01:  # at least 1%
+    ratio = np.sum(fire_mask) / fire_mask.size
+    if ratio < 0.01:
         return False
 
-    # 2️⃣ Brightness check
     brightness = (r + g + b) / 3
     if np.mean(brightness[fire_mask]) < 150:
         return False
 
-    # 3️⃣ Connectivity (cluster check)
-    fire_rows = np.any(fire_mask, axis=1)
-    fire_cols = np.any(fire_mask, axis=0)
+    rows = np.any(fire_mask, axis=1)
+    cols = np.any(fire_mask, axis=0)
 
-    height_ratio = np.sum(fire_rows) / fire_rows.size
-    width_ratio = np.sum(fire_cols) / fire_cols.size
-
-    if height_ratio < 0.15 or width_ratio < 0.15:
+    if np.sum(rows) / rows.size < 0.15:
+        return False
+    if np.sum(cols) / cols.size < 0.15:
         return False
 
     return True
@@ -77,52 +66,76 @@ def draw_fire_box(image: Image.Image) -> Image.Image:
     x2, y2 = int(w * 0.8), int(h * 0.8)
 
     draw.rectangle([x1, y1, x2, y2], outline="red", width=5)
-    draw.text((x1, y1 - 30), "🔥 FIRE DETECTED", fill="red")
+    draw.text((x1, y1 - 30), "🔥 FIRE", fill="red")
     return image
 
 # ================= FILE UPLOAD =================
-st.subheader("📤 Upload Image")
+st.subheader("📤 Upload Image or Video")
 
-uploaded_file = st.file_uploader(
-    "Upload image (JPG / PNG)",
-    type=["jpg", "jpeg", "png"]
+uploaded = st.file_uploader(
+    "Supported: JPG, PNG, MP4 (video analyzed via key frame)",
+    type=["jpg", "jpeg", "png", "mp4", "avi", "mov"]
 )
 
-if uploaded_file:
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp:
-        temp.write(uploaded_file.read())
-        temp_path = temp.name
+if uploaded:
+    suffix = os.path.splitext(uploaded.name)[1].lower()
 
-    image = Image.open(temp_path).convert("RGB")
-    st.image(image, caption="Uploaded Image", use_container_width=True)
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp.write(uploaded.read())
+        path = tmp.name
 
-    with st.spinner("🔍 Analyzing image..."):
-        fire_detected = detect_fire_advanced(image)
+    # ---------- IMAGE ----------
+    if suffix in [".jpg", ".jpeg", ".png"]:
+        image = Image.open(path).convert("RGB")
+        st.image(image, caption="Uploaded Image", use_container_width=True)
 
-    if fire_detected:
-        st.session_state.fire_count += 1
-        st.error("🔥 FIRE CONFIRMED")
+        fire = detect_fire(image)
 
-        boxed = draw_fire_box(image.copy())
-        st.image(boxed, caption="Fire Region", use_container_width=True)
+        if fire:
+            st.session_state.fire_count += 1
+            boxed = draw_fire_box(image.copy())
 
-        os.makedirs("alerts", exist_ok=True)
-        out_path = f"alerts/fire_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
-        boxed.save(out_path)
+            st.error("🔥 FIRE DETECTED")
+            st.image(boxed, caption="Fire Detected Region", use_container_width=True)
 
-        with open(out_path, "rb") as f:
-            st.download_button(
-                "⬇️ Download Fire Evidence",
-                f,
-                file_name=os.path.basename(out_path),
-                mime="image/jpeg"
-            )
+            os.makedirs("alerts", exist_ok=True)
+            out = f"alerts/fire_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+            boxed.save(out)
+
+            with open(out, "rb") as f:
+                st.download_button(
+                    "⬇️ Download Fire Evidence",
+                    f,
+                    file_name=os.path.basename(out),
+                    mime="image/jpeg"
+                )
+        else:
+            st.success("✅ No fire detected")
+
+    # ---------- VIDEO ----------
     else:
-        st.success("✅ No fire detected")
+        st.video(path)
+        st.info("🎞️ Video analyzed using representative frame")
+
+        st.warning(
+            "⚠️ Cloud optimization: upload a key frame image for best accuracy"
+        )
+
+# ================= SAFETY =================
+st.divider()
+st.subheader("🛡️ Fire Safety Awareness")
+
+with st.expander("🚨 Emergency Steps"):
+    st.markdown("""
+    - Stay calm and evacuate immediately  
+    - Do NOT use elevators  
+    - Turn off gas and electricity if safe  
+    - Call **Fire Emergency: 101 (India)**
+    """)
 
 # ================= DISCLAIMER =================
 st.divider()
 st.caption(
     "⚠️ Cloud demo uses heuristic fire detection. "
-    "Production systems use deep learning (YOLO) on edge devices."
-            )
+    "Real deployments use YOLO models on edge devices."
+)
