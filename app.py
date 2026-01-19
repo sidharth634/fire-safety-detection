@@ -1,3 +1,4 @@
+
 import streamlit as st
 import tempfile
 import os
@@ -8,7 +9,7 @@ from PIL import Image, ImageDraw
 # ================= PAGE CONFIG =================
 st.set_page_config(
     page_title="🔥 Fire Safety Detection System",
-    page_icon="🔥",
+    page_icon="",
     layout="wide"
 )
 
@@ -25,7 +26,7 @@ if "history" not in st.session_state:
 # ================= HEADER =================
 st.markdown(
     """
-    <h1 style="text-align:center;"> Fire Safety Detection System</h1>
+    <h1 style="text-align:center;"> 🔥Fire Safety Detection System</h1>
     <p style="text-align:center;font-size:18px;">
     Cloud-Safe | Image & Video Snapshot Fire Detection | Safety-First Design
     </p>
@@ -241,4 +242,5 @@ st.caption(
     "⚠️ Disclaimer: This system assists early fire detection and does NOT "
     "replace certified fire alarm systems. Cloud version uses snapshot-based analysis."
 )
+
 
