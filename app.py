@@ -4,7 +4,6 @@ import os
 import numpy as np
 from datetime import datetime
 from PIL import Image, ImageDraw
-import imageio
 
 # ================= PAGE CONFIG =================
 st.set_page_config(
@@ -19,15 +18,15 @@ if "fire_count" not in st.session_state:
 
 # ================= HEADER =================
 st.title("🔥 Fire Safety Detection System")
-st.caption("Cloud-safe fire detection • Image & Video supported")
+st.caption("Cloud-safe fire detection • Image & Video snapshot analysis")
 st.divider()
 
 # ================= STATUS =================
 st.subheader("📊 System Status")
 st.info(f"🔥 Total fire events detected: {st.session_state.fire_count}")
 
-# ================= FIRE DETECTION =================
-def detect_fire(image: Image.Image):
+# ================= FIRE DETECTION LOGIC =================
+def detect_fire(image: Image.Image) -> bool:
     img = np.array(image).astype(np.float32)
     r, g, b = img[:, :, 0], img[:, :, 1], img[:, :, 2]
 
@@ -40,7 +39,6 @@ def detect_fire(image: Image.Image):
     )
 
     fire_ratio = np.sum(fire_mask) / fire_mask.size
-
     if fire_ratio < 0.005:
         return False
 
@@ -51,100 +49,94 @@ def detect_fire(image: Image.Image):
     return True
 
 
-def draw_fire_box(image: Image.Image):
+def draw_fire_box(image: Image.Image) -> Image.Image:
     draw = ImageDraw.Draw(image)
     w, h = image.size
+
     x1, y1 = int(w * 0.2), int(h * 0.2)
     x2, y2 = int(w * 0.8), int(h * 0.8)
+
     draw.rectangle([x1, y1, x2, y2], outline="red", width=5)
     draw.text((x1, y1 - 30), "🔥 FIRE", fill="red")
     return image
 
-# ================= FILE UPLOAD =================
-st.subheader("📤 Upload Image or Video")
+# ================= IMAGE UPLOAD =================
+st.subheader("📤 Upload Image")
 
-uploaded = st.file_uploader(
-    "Supported formats: JPG, PNG, MP4, AVI, MOV",
-    type=["jpg", "jpeg", "png", "mp4", "avi", "mov"]
+image_file = st.file_uploader(
+    "Upload an image (JPG / PNG)",
+    type=["jpg", "jpeg", "png"]
 )
 
-if uploaded:
-    suffix = os.path.splitext(uploaded.name)[1].lower()
-
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        tmp.write(uploaded.read())
+if image_file:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+        tmp.write(image_file.read())
         path = tmp.name
 
-    # ================= IMAGE =================
-    if suffix in [".jpg", ".jpeg", ".png"]:
-        image = Image.open(path).convert("RGB")
-        st.image(image, caption="Uploaded Image", use_container_width=True)
+    image = Image.open(path).convert("RGB")
+    st.image(image, caption="Uploaded Image", use_container_width=True)
 
-        with st.spinner("🔍 Analyzing image..."):
+    with st.spinner("🔍 Analyzing image..."):
+        fire = detect_fire(image)
+
+    if fire:
+        st.session_state.fire_count += 1
+        boxed = draw_fire_box(image.copy())
+
+        st.error("🔥 FIRE DETECTED")
+        st.image(boxed, caption="Fire Detected Region", use_container_width=True)
+
+        os.makedirs("alerts", exist_ok=True)
+        out = f"alerts/fire_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+        boxed.save(out)
+
+        with open(out, "rb") as f:
+            st.download_button(
+                "⬇️ Download Fire Evidence Image",
+                f,
+                file_name=os.path.basename(out),
+                mime="image/jpeg"
+            )
+    else:
+        st.success("✅ No fire detected in the image")
+
+# ================= VIDEO SECTION =================
+st.divider()
+st.subheader("🎥 Video Fire Detection (Cloud-Safe)")
+
+st.info(
+    "🔒 Cloud platforms cannot decode videos.\n\n"
+    "👉 Upload a **snapshot (frame)** from your video for fire detection."
+)
+
+video_file = st.file_uploader(
+    "Upload video (MP4 / AVI / MOV)",
+    type=["mp4", "avi", "mov"]
+)
+
+if video_file:
+    st.video(video_file)
+    st.warning("⬇️ Now upload a snapshot (frame) from this video")
+
+    frame_file = st.file_uploader(
+        "Upload snapshot image from the video",
+        type=["jpg", "jpeg", "png"],
+        key="video_frame"
+    )
+
+    if frame_file:
+        image = Image.open(frame_file).convert("RGB")
+        st.image(image, caption="Video Snapshot", use_container_width=True)
+
+        with st.spinner("🔍 Analyzing snapshot..."):
             fire = detect_fire(image)
 
         if fire:
             st.session_state.fire_count += 1
             boxed = draw_fire_box(image.copy())
 
-            st.error("🔥 FIRE DETECTED")
-            st.image(boxed, caption="Fire Detected", use_container_width=True)
-
-            os.makedirs("alerts", exist_ok=True)
-            out = f"alerts/fire_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
-            boxed.save(out)
-
-            with open(out, "rb") as f:
-                st.download_button(
-                    "⬇️ Download Fire Image",
-                    f,
-                    file_name=os.path.basename(out),
-                    mime="image/jpeg"
-                )
-        else:
-            st.success("✅ No fire detected")
-
-    # ================= VIDEO =================
-    else:
-        st.video(path)
-
-        st.spinner("🔍 Analyzing video for fire...")
-
-        reader = imageio.get_reader(path, format="ffmpeg")
-        fps = reader.get_meta_data().get("fps", 10)
-
-        fire_found = False
-        detected_frame = None
-
-        for i, frame in enumerate(reader):
-            # Sample 1 frame per second
-            if i % int(fps) != 0:
-                continue
-
-            image = Image.fromarray(frame).convert("RGB")
-            if detect_fire(image):
-                fire_found = True
-                detected_frame = draw_fire_box(image)
-                break
-
-        reader.close()
-
-        if fire_found:
-            st.session_state.fire_count += 1
             st.error("🔥 FIRE DETECTED IN VIDEO")
-            st.image(detected_frame, caption="Fire Detected Frame", use_container_width=True)
-
-            os.makedirs("alerts", exist_ok=True)
-            out = f"alerts/video_fire_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
-            detected_frame.save(out)
-
-            with open(out, "rb") as f:
-                st.download_button(
-                    "⬇️ Download Detected Frame",
-                    f,
-                    file_name=os.path.basename(out),
-                    mime="image/jpeg"
-                )
+            st.image(boxed, caption="Fire Detected Frame", use_container_width=True)
         else:
             st.success("✅ No fire detected in the video")
 
@@ -163,8 +155,6 @@ with st.expander("🚨 Emergency Steps"):
 # ================= DISCLAIMER =================
 st.divider()
 st.caption(
-    "⚠️ Cloud deployment uses optimized fire detection. "
-    "Production systems use deep learning models on edge devices."
+    "⚠️ This cloud demo uses snapshot-based fire detection for stability. "
+    "Production systems use deep-learning models on edge devices."
 )
-
-
