@@ -18,47 +18,59 @@ if "fire_count" not in st.session_state:
 
 # ================= HEADER =================
 st.title("🔥 Fire Safety Detection System")
-st.caption("Cloud-safe demo • Visual fire detection • No GPU required")
+st.caption("Unified Cloud Demo • Stable on Hugging Face & Streamlit Cloud")
 st.divider()
 
 # ================= STATUS =================
 st.subheader("📊 System Status")
 st.info(f"🔥 Total fire events detected: {st.session_state.fire_count}")
 
-# ================= FIRE DETECTION (CLOUD SAFE) =================
-def detect_fire(image: Image.Image) -> bool:
-    """Multi-stage fire detection using color + brightness + clustering"""
+# ================= ROBUST FIRE DETECTION =================
+def detect_fire(image: Image.Image):
+    """
+    Returns:
+        fire_detected (bool)
+        confidence (float)
+    """
     img = np.array(image).astype(np.float32)
+
     r, g, b = img[:, :, 0], img[:, :, 1], img[:, :, 2]
 
+    # Fire color heuristic (RELAXED + ROBUST)
     fire_mask = (
-        (r > 160) &
-        (g > 90) &
-        (b < 120) &
+        (r > 140) &
+        (g > 80) &
+        (b < 140) &
         (r > g) &
-        (g > b)
+        (g >= b)
     )
 
-    ratio = np.sum(fire_mask) / fire_mask.size
-    if ratio < 0.01:
-        return False
+    fire_pixels = np.sum(fire_mask)
+    total_pixels = fire_mask.size
+    fire_ratio = fire_pixels / total_pixels
 
+    # Brightness confirmation
     brightness = (r + g + b) / 3
-    if np.mean(brightness[fire_mask]) < 150:
-        return False
+    bright_fire = brightness[fire_mask]
 
-    rows = np.any(fire_mask, axis=1)
-    cols = np.any(fire_mask, axis=0)
+    if bright_fire.size == 0:
+        return False, 0.0
 
-    if np.sum(rows) / rows.size < 0.15:
-        return False
-    if np.sum(cols) / cols.size < 0.15:
-        return False
+    avg_brightness = np.mean(bright_fire)
 
-    return True
+    # Confidence score (used for debugging & stability)
+    confidence = min(1.0, fire_ratio * 20 + avg_brightness / 255)
+
+    # Final decision (platform-stable)
+    fire_detected = (
+        fire_ratio > 0.005 and      # 0.5% fire pixels
+        avg_brightness > 120        # glowing fire
+    )
+
+    return fire_detected, confidence
 
 
-def draw_fire_box(image: Image.Image) -> Image.Image:
+def draw_fire_box(image: Image.Image):
     draw = ImageDraw.Draw(image)
     w, h = image.size
 
@@ -73,7 +85,7 @@ def draw_fire_box(image: Image.Image) -> Image.Image:
 st.subheader("📤 Upload Image or Video")
 
 uploaded = st.file_uploader(
-    "Supported: JPG, PNG, MP4 (video analyzed via key frame)",
+    "Supported: JPG, PNG, MP4",
     type=["jpg", "jpeg", "png", "mp4", "avi", "mov"]
 )
 
@@ -89,14 +101,17 @@ if uploaded:
         image = Image.open(path).convert("RGB")
         st.image(image, caption="Uploaded Image", use_container_width=True)
 
-        fire = detect_fire(image)
+        with st.spinner("🔍 Analyzing image..."):
+            fire, confidence = detect_fire(image)
+
+        st.caption(f"Detection confidence: **{confidence:.2f}**")
 
         if fire:
             st.session_state.fire_count += 1
-            boxed = draw_fire_box(image.copy())
 
+            boxed = draw_fire_box(image.copy())
             st.error("🔥 FIRE DETECTED")
-            st.image(boxed, caption="Fire Detected Region", use_container_width=True)
+            st.image(boxed, caption="Fire Region", use_container_width=True)
 
             os.makedirs("alerts", exist_ok=True)
             out = f"alerts/fire_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
@@ -115,10 +130,9 @@ if uploaded:
     # ---------- VIDEO ----------
     else:
         st.video(path)
-        st.info("🎞️ Video analyzed using representative frame")
-
         st.warning(
-            "⚠️ Cloud optimization: upload a key frame image for best accuracy"
+            "🎞️ Video analysis on cloud is optimized.\n\n"
+            "➡️ Upload a key frame image for accurate detection."
         )
 
 # ================= SAFETY =================
@@ -136,6 +150,6 @@ with st.expander("🚨 Emergency Steps"):
 # ================= DISCLAIMER =================
 st.divider()
 st.caption(
-    "⚠️ Cloud demo uses heuristic fire detection. "
-    "Real deployments use YOLO models on edge devices."
+    "⚠️ Cloud deployments use heuristic fire detection for stability. "
+    "Production systems use deep-learning models on edge devices."
 )
