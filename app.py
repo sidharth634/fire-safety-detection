@@ -4,7 +4,7 @@ import os
 import numpy as np
 from datetime import datetime
 from PIL import Image, ImageDraw
-import imageio.v2 as imageio
+import imageio
 
 # ================= PAGE CONFIG =================
 st.set_page_config(
@@ -166,3 +166,4 @@ st.caption(
     "⚠️ Cloud deployment uses optimized fire detection. "
     "Production systems use deep learning models on edge devices."
 )
+
