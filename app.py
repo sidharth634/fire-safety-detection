@@ -1,4 +1,3 @@
-
 import streamlit as st
 import tempfile
 import os
@@ -9,7 +8,7 @@ from PIL import Image, ImageDraw
 # ================= PAGE CONFIG =================
 st.set_page_config(
     page_title="🔥 Fire Safety Detection System",
-    page_icon="",
+    page_icon="🔥",
     layout="wide"
 )
 
@@ -23,12 +22,35 @@ if "fire_count" not in st.session_state:
 if "history" not in st.session_state:
     st.session_state.history = []
 
+if "theme" not in st.session_state:
+    st.session_state.theme = "Light"
+
+# ================= THEME TOGGLE =================
+st.sidebar.header("🎨 Theme")
+theme_toggle = st.sidebar.toggle(
+    "🌙 Dark Mode",
+    value=(st.session_state.theme == "Dark")
+)
+
+st.session_state.theme = "Dark" if theme_toggle else "Light"
+
+# Apply theme
+if st.session_state.theme == "Dark":
+    st.markdown(
+        """
+        <style>
+        body { background-color: #0E1117; color: white; }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
 # ================= HEADER =================
 st.markdown(
     """
-    <h1 style="text-align:center;"> 🔥Fire Safety Detection System</h1>
+    <h1 style="text-align:center;">🔥 Fire Safety Detection System</h1>
     <p style="text-align:center;font-size:18px;">
-    Cloud-Safe | Image & Video Snapshot Fire Detection | Safety-First Design
+    Cloud-Safe | Image & Video Snapshot Fire Detection
     </p>
     """,
     unsafe_allow_html=True
@@ -37,7 +59,6 @@ st.divider()
 
 # ================= SIDEBAR =================
 ADMIN_PASSWORD = "admin123"
-
 st.sidebar.header("🔐 Admin Login")
 
 if not st.session_state.admin_logged_in:
@@ -61,7 +82,7 @@ st.subheader("📊 Dashboard")
 col1, col2, col3 = st.columns(3)
 col1.metric("🔥 Fire Events", st.session_state.fire_count)
 col2.metric("📁 Files Analyzed", len(st.session_state.history))
-col3.metric("🟢 System Status", "Active")
+col3.metric("🎨 Theme", st.session_state.theme)
 
 st.divider()
 
@@ -83,44 +104,37 @@ def detect_fire(image: Image.Image) -> bool:
         return False
 
     brightness = (r + g + b) / 3
-    if np.mean(brightness[fire_mask]) < 120:
-        return False
-
-    return True
+    return np.mean(brightness[fire_mask]) > 120
 
 
 def draw_fire_box(image: Image.Image) -> Image.Image:
     draw = ImageDraw.Draw(image)
     w, h = image.size
-    x1, y1 = int(w * 0.2), int(h * 0.2)
-    x2, y2 = int(w * 0.8), int(h * 0.8)
-    draw.rectangle([x1, y1, x2, y2], outline="red", width=5)
-    draw.text((x1, y1 - 30), "🔥 FIRE", fill="red")
+    draw.rectangle(
+        [int(w*0.2), int(h*0.2), int(w*0.8), int(h*0.8)],
+        outline="red", width=5
+    )
+    draw.text((int(w*0.2), int(h*0.2)-30), "🔥 FIRE", fill="red")
     return image
 
-# ================= MAIN TABS =================
+# ================= TABS =================
 tab1, tab2, tab3, tab4 = st.tabs(
     ["🖼 Image Detection", "🎥 Video Detection", "📂 History", "🛡 Safety"]
 )
 
-# ================= IMAGE DETECTION =================
+# ================= IMAGE =================
 with tab1:
-    st.subheader("🖼 Image Fire Detection")
-
     img_file = st.file_uploader(
-        "Upload image (JPG / PNG)",
-        type=["jpg", "jpeg", "png"],
-        key="image_upload"
+        "Upload image",
+        type=["jpg", "jpeg", "png"]
     )
 
     if img_file:
         image = Image.open(img_file).convert("RGB")
-        st.image(image, caption="Uploaded Image", use_container_width=True)
+        st.image(image, use_container_width=True)
 
-        with st.spinner("🔍 Analyzing image..."):
-            fire = detect_fire(image)
-
-        timestamp = datetime.now().strftime("%d %b %Y, %H:%M:%S")
+        fire = detect_fire(image)
+        time_now = datetime.now().strftime("%d %b %Y, %H:%M:%S")
 
         if fire:
             boxed = draw_fire_box(image.copy())
@@ -129,80 +143,51 @@ with tab1:
 
             st.session_state.fire_count += 1
             st.session_state.history.append(
-                {"time": timestamp, "type": "Image", "result": "Fire"}
+                {"time": time_now, "type": "Image", "result": "Fire"}
             )
-
-            os.makedirs("alerts", exist_ok=True)
-            out = f"alerts/fire_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
-            boxed.save(out)
-
-            with open(out, "rb") as f:
-                st.download_button(
-                    "⬇️ Download Fire Evidence",
-                    f,
-                    file_name=os.path.basename(out),
-                    mime="image/jpeg"
-                )
         else:
             st.success("✅ No fire detected")
             st.session_state.history.append(
-                {"time": timestamp, "type": "Image", "result": "No Fire"}
+                {"time": time_now, "type": "Image", "result": "No Fire"}
             )
 
-# ================= VIDEO DETECTION =================
+# ================= VIDEO =================
 with tab2:
-    st.subheader("🎥 Video Fire Detection (Snapshot-Based)")
+    st.info("Upload a snapshot image from the video for detection.")
 
-    st.info(
-        "🔒 Cloud platforms cannot decode videos.\n\n"
-        "👉 Upload a **snapshot (frame)** from your video for detection."
+    frame = st.file_uploader(
+        "Upload video snapshot",
+        type=["jpg", "jpeg", "png"]
     )
 
-    video_file = st.file_uploader(
-        "Upload video (MP4 / AVI / MOV)",
-        type=["mp4", "avi", "mov"],
-        key="video_upload"
-    )
+    if frame:
+        image = Image.open(frame).convert("RGB")
+        st.image(image, use_container_width=True)
 
-    if video_file:
-        st.video(video_file)
+        fire = detect_fire(image)
+        time_now = datetime.now().strftime("%d %b %Y, %H:%M:%S")
 
-        frame_file = st.file_uploader(
-            "Upload snapshot image from this video",
-            type=["jpg", "jpeg", "png"],
-            key="video_frame_upload"
-        )
+        if fire:
+            boxed = draw_fire_box(image.copy())
+            st.error("🔥 FIRE DETECTED IN VIDEO")
+            st.image(boxed, use_container_width=True)
 
-        if frame_file:
-            image = Image.open(frame_file).convert("RGB")
-            st.image(image, caption="Video Snapshot", use_container_width=True)
-
-            with st.spinner("🔍 Analyzing snapshot..."):
-                fire = detect_fire(image)
-
-            timestamp = datetime.now().strftime("%d %b %Y, %H:%M:%S")
-
-            if fire:
-                boxed = draw_fire_box(image.copy())
-                st.error("🔥 FIRE DETECTED IN VIDEO")
-                st.image(boxed, use_container_width=True)
-
-                st.session_state.fire_count += 1
-                st.session_state.history.append(
-                    {"time": timestamp, "type": "Video", "result": "Fire"}
-                )
-            else:
-                st.success("✅ No fire detected in video")
-                st.session_state.history.append(
-                    {"time": timestamp, "type": "Video", "result": "No Fire"}
-                )
+            st.session_state.fire_count += 1
+            st.session_state.history.append(
+                {"time": time_now, "type": "Video", "result": "Fire"}
+            )
+        else:
+            st.success("✅ No fire detected")
+            st.session_state.history.append(
+                {"time": time_now, "type": "Video", "result": "No Fire"}
+            )
 
 # ================= HISTORY =================
 with tab3:
     st.subheader("📂 Detection History")
 
     if not st.session_state.history:
-        st.info("No detections yet.")
+        st.info("📭 No detections yet.")
     else:
         for h in reversed(st.session_state.history):
             st.markdown(
@@ -210,37 +195,29 @@ with tab3:
                 f"{'🔥 Fire' if h['result']=='Fire' else '✅ No Fire'}"
             )
 
-        if st.session_state.admin_logged_in:
-            if st.button("🗑 Clear History (Admin)"):
-                st.session_state.history.clear()
-                st.session_state.fire_count = 0
-                st.rerun()
+    if st.session_state.admin_logged_in:
+        if st.button("🗑 Clear History (Admin Only)"):
+            st.session_state.history.clear()
+            st.session_state.fire_count = 0
+            st.success("History cleared successfully")
+            st.rerun()
 
 # ================= SAFETY =================
 with tab4:
-    st.subheader("🛡 Fire Safety Awareness")
+    st.markdown("""
+    ### 🚨 Emergency Steps
+    - Evacuate immediately  
+    - Do not use elevators  
+    - Call **101**
 
-    with st.expander("🚨 Emergency Steps"):
-        st.markdown("""
-        - Stay calm and evacuate immediately  
-        - Do NOT use elevators  
-        - Turn off gas and electricity if safe  
-        - Call **Fire Emergency: 101 (India)**
-        """)
-
-    with st.expander("🧯 Fire Prevention Tips"):
-        st.markdown("""
-        - Never leave cooking unattended  
-        - Keep flammable items away from heat  
-        - Inspect wiring regularly  
-        - Install smoke detectors
-        """)
+    ### 🧯 Prevention
+    - Avoid unattended cooking  
+    - Check wiring  
+    - Install smoke detectors
+    """)
 
 # ================= DISCLAIMER =================
 st.divider()
 st.caption(
-    "⚠️ Disclaimer: This system assists early fire detection and does NOT "
-    "replace certified fire alarm systems. Cloud version uses snapshot-based analysis."
+    "⚠️ This system assists early fire detection and does NOT replace certified fire alarm systems."
 )
-
-
