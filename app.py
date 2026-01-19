@@ -110,7 +110,7 @@ if uploaded:
 
         st.spinner("🔍 Analyzing video for fire...")
 
-        reader = imageio.get_reader(path)
+        reader = imageio.get_reader(path, format="ffmpeg")
         fps = reader.get_meta_data().get("fps", 10)
 
         fire_found = False
@@ -166,4 +166,5 @@ st.caption(
     "⚠️ Cloud deployment uses optimized fire detection. "
     "Production systems use deep learning models on edge devices."
 )
+
 
